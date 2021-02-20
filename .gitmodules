@@ -1,0 +1,3 @@
+[submodule "lib/http-server"]
+	path = lib/http-server
+	url = https://github.com/mls-m5/http-server

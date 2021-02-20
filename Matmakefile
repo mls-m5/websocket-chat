@@ -1,0 +1,18 @@
+
+main
+  src =
+    src/*.cpp
+    src/*.cppm
+  out = main
+  command = [exe]
+
+all
+  in = @main
+  include =
+    include
+    src
+    lib/http-server/include
+  config =
+    debug
+    modules
+
