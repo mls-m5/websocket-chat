@@ -15,4 +15,6 @@ all
   config =
     debug
     modules
+  ldflags =
+    -pthread
 
