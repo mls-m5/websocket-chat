@@ -14,13 +14,85 @@ namespace asio = boost::asio;
 
 using tcp = boost::asio::ip::tcp;
 
-class Session {
-    websocket::stream<beast::tcp_stream> _websocket;
+class Session : std::enable_shared_from_this<Session> {
+public:
+    websocket::stream<beast::tcp_stream> _stream;
     beast::flat_buffer _buffer;
 
     Session(tcp::socket &&socket)
-        : _websocket(std::move(socket)) {
+        : _stream(std::move(socket)) {
         std::cout << "server created\n";
+    }
+
+    void run() {
+        asio::dispatch(_stream.get_executor(), [self = shared_from_this()] {
+            // To run on right context/strand
+            self->onRun();
+        });
+    }
+
+    void onRun() {
+        _stream.set_option(websocket::stream_base::timeout::suggested(
+            beast::role_type::server));
+
+        _stream.set_option(websocket::stream_base::decorator(
+            [](websocket::response_type &res) {
+                res.set(beast::http::field::server,
+                        std::string{BOOST_BEAST_VERSION_STRING} +
+                            " websocket-server-async");
+            }));
+
+        _stream.async_accept([self = shared_from_this()](beast::error_code ec) {
+
+        });
+    }
+
+    void onAccept(beast::error_code ec) {
+        if (ec) {
+            std::cerr << "failed session accept\n";
+            return;
+        }
+
+        read();
+    }
+
+    void read() {
+        _stream.async_read(_buffer,
+                           [self = shared_from_this()](beast::error_code ec,
+                                                       size_t bytesTransfered) {
+                               self->onRead(ec, bytesTransfered);
+                           });
+    }
+
+    void onRead(beast::error_code ec, size_t bytesTransfered) {
+        boost::ignore_unused(bytesTransfered);
+
+        if (ec == websocket::error::closed) {
+            return;
+        }
+        else if (ec) {
+            std::cerr << "error onRead: " << ec << std::endl;
+        }
+
+        _stream.text(_stream.got_text());
+        _stream.async_write(
+            _buffer.data(),
+            [self = shared_from_this()](auto ec, auto bytesTransfered) {
+
+            });
+    }
+
+    void onWrite(beast::error_code ec, size_t bytesTransfered) {
+        boost::ignore_unused(bytesTransfered);
+
+        if (ec) {
+            std::cerr << "failed onWrite " << ec << "\n";
+            return;
+        }
+
+        _buffer.consume(_buffer.size());
+
+        read();
     }
 };
 
@@ -57,7 +129,17 @@ public:
         }
     }
 
-    void onAccept(tcp::socket socket) {
+    void onAccept(beast::error_code ec, tcp::socket socket) {
+        if (ec) {
+            std::cerr << "failed to accept\n";
+            return;
+        }
+        else {
+            std::cout << "accept client" << std::endl;
+
+            std::make_shared<Session>(std::move(socket))->run();
+        }
+
         run();
     }
 
@@ -65,7 +147,7 @@ public:
         _acceptor.async_accept(asio::make_strand(_context),
                                [self = shared_from_this()](beast::error_code ec,
                                                            tcp::socket socket) {
-                                   self->onAccept(std::move(socket));
+                                   self->onAccept(ec, std::move(socket));
                                });
     }
 
