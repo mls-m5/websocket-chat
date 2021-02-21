@@ -14,7 +14,7 @@ namespace asio = boost::asio;
 
 using tcp = boost::asio::ip::tcp;
 
-class Session : std::enable_shared_from_this<Session> {
+class Session : public std::enable_shared_from_this<Session> {
 public:
     websocket::stream<beast::tcp_stream> _stream;
     beast::flat_buffer _buffer;
@@ -24,7 +24,12 @@ public:
         std::cout << "server created\n";
     }
 
+    ~Session() {
+        std::cout << "session closed\n";
+    }
+
     void run() {
+        std::cout << "run()" << std::endl;
         asio::dispatch(_stream.get_executor(), [self = shared_from_this()] {
             // To run on right context/strand
             self->onRun();
@@ -32,6 +37,7 @@ public:
     }
 
     void onRun() {
+        std::cout << "on run " << std::endl;
         _stream.set_option(websocket::stream_base::timeout::suggested(
             beast::role_type::server));
 
@@ -43,7 +49,7 @@ public:
             }));
 
         _stream.async_accept([self = shared_from_this()](beast::error_code ec) {
-
+            self->onAccept(ec);
         });
     }
 
@@ -57,6 +63,7 @@ public:
     }
 
     void read() {
+        std::cout << "read..." << std::endl;
         _stream.async_read(_buffer,
                            [self = shared_from_this()](beast::error_code ec,
                                                        size_t bytesTransfered) {
@@ -65,6 +72,7 @@ public:
     }
 
     void onRead(beast::error_code ec, size_t bytesTransfered) {
+        std::cout << "on read..." << std::endl;
         boost::ignore_unused(bytesTransfered);
 
         if (ec == websocket::error::closed) {
@@ -78,11 +86,12 @@ public:
         _stream.async_write(
             _buffer.data(),
             [self = shared_from_this()](auto ec, auto bytesTransfered) {
-
+                self->onWrite(ec, bytesTransfered);
             });
     }
 
     void onWrite(beast::error_code ec, size_t bytesTransfered) {
+        std::cout << "on write..." << std::endl;
         boost::ignore_unused(bytesTransfered);
 
         if (ec) {
@@ -96,7 +105,7 @@ public:
     }
 };
 
-class Listener : std::enable_shared_from_this<Listener> {
+class Listener : public std::enable_shared_from_this<Listener> {
 public:
     Listener(asio::io_context &context, tcp::endpoint endpoint)
         : _context{context}
@@ -159,6 +168,8 @@ export void runServer(unsigned short port, int numThreads = 1) {
     asio::io_context context{numThreads};
     auto threads = std::vector<std::thread>{};
     threads.reserve(numThreads);
+
+    std::cout << "starting websocket server at " << port << std::endl;
 
     std::make_shared<Listener>(context, tcp::endpoint{tcp::v4(), port})->run();
 

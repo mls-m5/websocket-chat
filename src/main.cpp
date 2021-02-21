@@ -2,11 +2,13 @@
 
 import server;
 
+//! To test this, run in browser javascript console:
+//!
+//! var exampleSocket = new WebSocket("ws://localhost:8080")
+//! exampleSocket.onmessage = x => console.log(x)
+//! exampleSocket.send("hello");
+//!
 int main(int argc, char *argv[]) {
-    //    auto server = Server{8080};
-
-    //    server.run();
-
     runServer(8080, 1);
 
     std::cout << "hello\n";
